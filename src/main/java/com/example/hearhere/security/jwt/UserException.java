@@ -5,11 +5,11 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public class TokenException extends RuntimeException {
-    private final TokenErrorResult tokenErrorResult;
+public class UserException extends RuntimeException {
+    private final UserErrorResult userErrorResult;
 
     @Override
     public String getMessage() {
-        return tokenErrorResult.getMessage();
+        return userErrorResult.getMessage();
     }
 }
