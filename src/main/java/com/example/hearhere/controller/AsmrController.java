@@ -2,6 +2,8 @@ package com.example.hearhere.controller;
 
 import com.example.hearhere.dto.GenerateAsmrRequestDto;
 import com.example.hearhere.dto.GenerateAsmrResponseDto;
+import com.example.hearhere.dto.GenerateRandomPromptResponseDto;
+import com.example.hearhere.repository.ExamplePromptRepository;
 import com.example.hearhere.service.AudioSearchService;
 import com.example.hearhere.service.ChatGptService;
 import com.example.hearhere.service.SunoAiService;
@@ -25,15 +27,21 @@ import java.util.stream.Collectors;
 public class AsmrController {
 
     @Autowired
-    ChatGptService chatGptService;
+    private ChatGptService chatGptService;
     @Autowired
-    SunoAiService sunoAiService;
+    private SunoAiService sunoAiService;
     @Autowired
-    AudioSearchService audioSearchService;
+    private AudioSearchService audioSearchService;
+    @Autowired
+    private ExamplePromptRepository examplePromptRepository;
 
     @GetMapping("/asmr/randomprompts")
     public ResponseEntity<?> getRandomPrompts() {
-        return null;
+        ArrayList<String> randomprompts = (ArrayList<String>) examplePromptRepository.get3RandomPrompts();
+        GenerateRandomPromptResponseDto responseDto = new GenerateRandomPromptResponseDto(randomprompts);
+        return (responseDto!=null)?
+                ResponseEntity.status(HttpStatus.OK).body(responseDto):
+                ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("랜덤 프롬프트 생성에 실패했습니다.");
     }
 
     @PostMapping("/asmr/generate")
