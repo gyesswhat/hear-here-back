@@ -49,6 +49,9 @@ public class AsmrController {
 
     @PostMapping("/asmr/generate")
     public ResponseEntity<?> generateASMR(@RequestBody GenerateAsmrRequestDto dto) throws InterruptedException {
+        // 0. 값 검증
+        if (!dto.isValid()) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("잘못된 요청입니다.");
+
         GenerateAsmrResponseDto responseDto = new GenerateAsmrResponseDto();
         // 1. ChatGPT로 프롬프트 작업
         Map<String, Object> finalPrompt = chatGptService.generatePrompt(dto.getUserPrompt());
