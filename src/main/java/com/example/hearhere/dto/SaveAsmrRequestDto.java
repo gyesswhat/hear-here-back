@@ -14,6 +14,7 @@ import java.util.ArrayList;
 @Getter
 @Setter
 public class SaveAsmrRequestDto {
+    private String title;
     private String musicUrl;
     private Integer musicVolumn;
     private ArrayList<String> soundUrls;

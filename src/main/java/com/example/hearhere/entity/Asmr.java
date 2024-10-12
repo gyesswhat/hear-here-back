@@ -23,6 +23,9 @@ public class Asmr {
     @Column(name = "user_id")
     private String userId;
 
+    @Column(name="title")
+    private String title;
+
     @Column(name = "music_url")
     private String musicUrl;
 

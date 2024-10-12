@@ -13,6 +13,7 @@ import java.util.ArrayList;
 @Setter
 public class RetrieveAsmrDto {
     private Long asmrId;
+    private String title;
     private String musicUrl;
     private Integer musicVolumn;
     private ArrayList<String> soundUrls;

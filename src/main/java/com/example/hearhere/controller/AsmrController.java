@@ -114,7 +114,7 @@ public class AsmrController {
         // 2. DTO 값 검증
         if (!requestDto.isValid()) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("잘못된 요청입니다.");
         // 3. ASMR 저장
-        Asmr created = new Asmr(null, userId, requestDto.getMusicUrl(), requestDto.getMusicVolumn(), requestDto.getSoundUrls().toString(), requestDto.getSoundVolumns().toString());
+        Asmr created = new Asmr(null, userId, requestDto.getTitle(), requestDto.getMusicUrl(), requestDto.getMusicVolumn(), requestDto.getSoundUrls().toString(), requestDto.getSoundVolumns().toString());
         Asmr saved = asmrRepository.save(created);
         // 4. 값 리턴
         return (saved!=null)?
@@ -135,6 +135,7 @@ public class AsmrController {
             Asmr searched = searchedList.get(i);
             responses.add(new RetrieveAsmrDto(
                     searched.getAsmrId(),
+                    searched.getTitle(),
                     searched.getMusicUrl(),
                     searched.getMusicVolumn(),
                     ArrayParser.parseStringToArrayList(searched.getSoundUrls()),
@@ -156,6 +157,7 @@ public class AsmrController {
         // 3. DTO에 넣어서 리턴
         RetrieveAsmrDto response = new RetrieveAsmrDto(
                 searched.getAsmrId(),
+                searched.getTitle(),
                 searched.getMusicUrl(),
                 searched.getMusicVolumn(),
                 ArrayParser.parseStringToArrayList(searched.getSoundUrls()),
