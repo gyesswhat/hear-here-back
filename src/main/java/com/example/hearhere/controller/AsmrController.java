@@ -88,7 +88,7 @@ public class AsmrController {
                         isGenerated = true;
                     }
                 }
-                responseDto.setMusicURL(audioInfo.get(0).get("audio_url").toString());
+                responseDto.setMusicUrl(audioInfo.get(0).get("audio_url").toString());
             } else {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Audio generation failed");
             }
@@ -101,7 +101,7 @@ public class AsmrController {
 
         // 5. 제목 짓기
         Map<String, Object> generatedTitle = chatGptService.generateTitle(dto.getUserPrompt());
-        responseDto.setAsmrTitle((String)generatedTitle.get("title"));
+        responseDto.setTitle((String)generatedTitle.get("title"));
 
         return ResponseEntity.status(HttpStatus.OK).body(responseDto);
     }
