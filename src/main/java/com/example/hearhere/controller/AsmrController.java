@@ -1,21 +1,20 @@
 package com.example.hearhere.controller;
 
-import com.example.hearhere.dto.GenerateAsmrRequestDto;
-import com.example.hearhere.dto.GenerateAsmrResponseDto;
-import com.example.hearhere.dto.GenerateRandomPromptResponseDto;
+import com.example.hearhere.common.parser.ArrayParser;
+import com.example.hearhere.dto.*;
+import com.example.hearhere.entity.Asmr;
+import com.example.hearhere.repository.AsmrRepository;
 import com.example.hearhere.repository.ExamplePromptRepository;
+import com.example.hearhere.security.jwt.JwtUtil;
 import com.example.hearhere.service.AudioSearchService;
 import com.example.hearhere.service.ChatGptService;
 import com.example.hearhere.service.SunoAiService;
-import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +23,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
+@RequiredArgsConstructor
 public class AsmrController {
 
     @Autowired
@@ -34,6 +34,9 @@ public class AsmrController {
     private AudioSearchService audioSearchService;
     @Autowired
     private ExamplePromptRepository examplePromptRepository;
+    @Autowired
+    private AsmrRepository asmrRepository;
+    private final JwtUtil jwtUtil;
 
     @GetMapping("/asmr/randomprompts")
     public ResponseEntity<?> getRandomPrompts() {
@@ -100,7 +103,61 @@ public class AsmrController {
         return ResponseEntity.status(HttpStatus.OK).body(responseDto);
     }
     @PostMapping("/asmr/save")
-    public ResponseEntity<?> saveAsmr(HttpServletRequest request) {
-        return null;
+    public ResponseEntity<?> saveAsmr(@RequestHeader("Authorization") String authorizationHeader,
+                                      @RequestBody SaveAsmrRequestDto requestDto) {
+        // 1. 토큰 사용해서 유저 uuid 찾기
+        String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
+        String userId = jwtUtil.getUserIdFromToken(accessToken);
+        // 2. DTO 값 검증
+        if (!requestDto.isValid()) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("잘못된 요청입니다.");
+        // 3. ASMR 저장
+        Asmr created = new Asmr(null, userId, requestDto.getMusicUrl(), requestDto.getMusicVolumn(), requestDto.getSoundUrls().toString(), requestDto.getSoundVolumns().toString());
+        Asmr saved = asmrRepository.save(created);
+        // 4. 값 리턴
+        return (saved!=null)?
+                ResponseEntity.status(HttpStatus.OK).body(new SaveAsmrResponseDto(saved.getAsmrId())):
+                ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("ASMR 저장에 실패했습니다.");
+    }
+
+    @GetMapping("/asmr/my-asmr")
+    public ResponseEntity<?> getMyAsmrList(@RequestHeader("Authorization") String authorizationHeader) {
+        // 1. 토큰 사용해서 유저 uuid 찾기
+        String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
+        String userId = jwtUtil.getUserIdFromToken(accessToken);
+        // 2. 유저 id 사용해서 ASMR 리스트 찾기
+        ArrayList<Asmr> searchedList = asmrRepository.findAllByUserId(userId);
+        // 3. DTO에 넣어서 리턴
+        ArrayList<RetrieveAsmrDto> responses = new ArrayList<>();
+        for (int i=0; i<searchedList.size(); i++) {
+            Asmr searched = searchedList.get(i);
+            responses.add(new RetrieveAsmrDto(
+                    searched.getAsmrId(),
+                    searched.getMusicUrl(),
+                    searched.getMusicVolumn(),
+                    ArrayParser.parseStringToArrayList(searched.getSoundUrls()),
+                    ArrayParser.parseStringToIntegerArrayList(searched.getSoundVolumns())
+            ));
+        }
+        return ResponseEntity.status(HttpStatus.OK).body(responses);
+    }
+
+    @GetMapping("/asmr/my-asmr/{asmrId}")
+    public ResponseEntity<?> getMyAsmr(@PathVariable("asmrId") Long asmrId, @RequestHeader("Authorization") String authorizationHeader) {
+        // 1. 토큰 사용해서 유저 id 찾기
+        String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
+        String userId = jwtUtil.getUserIdFromToken(accessToken);
+        // 2. 유저 id, asmr id 사용해서 엔티티 찾기
+        Asmr searched = asmrRepository.findById(asmrId).orElse(null);
+        if (searched==null || !searched.getUserId().toString().equals(userId))
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("잘못된 요청입니다.");
+        // 3. DTO에 넣어서 리턴
+        RetrieveAsmrDto response = new RetrieveAsmrDto(
+                searched.getAsmrId(),
+                searched.getMusicUrl(),
+                searched.getMusicVolumn(),
+                ArrayParser.parseStringToArrayList(searched.getSoundUrls()),
+                ArrayParser.parseStringToIntegerArrayList(searched.getSoundVolumns())
+        );
+        return ResponseEntity.status(HttpStatus.OK).body(response);
     }
 }
