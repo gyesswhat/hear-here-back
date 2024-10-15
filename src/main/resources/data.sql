@@ -1,7 +1,3 @@
-CREATE TABLE example_prompt (
-                                prompt_id INT AUTO_INCREMENT PRIMARY KEY,
-                                prompt VARCHAR(255) NOT NULL
-);
 INSERT INTO example_prompt(prompt) VALUES
                                        ('Dense forest, birds chirping, waterfall cascading down'),
                                        ('Summer Hawaii wave, dolphin calls, people giggling'),
