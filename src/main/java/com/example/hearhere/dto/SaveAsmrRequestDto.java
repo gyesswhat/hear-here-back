@@ -22,17 +22,19 @@ public class SaveAsmrRequestDto {
 
     // 입력값 검증 메소드
     public boolean isValid() {
-        return isValidMusicUrl() && isValidMusicVolumn() && areValidSoundUrls() && areValidSoundVolumns();
+        return title!=null && isValidMusicUrl() && isValidMusicVolumn() && areValidSoundUrls() && areValidSoundVolumns();
     }
 
     // 음악 URL 검증 (유효한 URL인지 확인)
     private boolean isValidMusicUrl() {
-        return musicUrl != null && isValidUrl(musicUrl);
+        if (musicUrl == null) return true;
+        else return isValidUrl(musicUrl);
     }
 
     // 음악 볼륨 값 검증 (0~100 사이의 값인지 확인)
     private boolean isValidMusicVolumn() {
-        return musicVolumn != null && musicVolumn >= 0 && musicVolumn <= 100;
+        if (musicVolumn == null) return true;
+        else return (musicVolumn >= 0 && musicVolumn <= 100);
     }
 
     // 사운드 URL 검증 (유효한 URL 배열인지 확인)
