@@ -17,9 +17,8 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(TokenException.class)
-    public ResponseEntity<ErrorReasonDto> handleTokenException(TokenException ex) {
-        // 에러 메시지를 클라이언트로 바로 반환
-        return new ResponseEntity<>(ex.getTokenErrorResult().getReasonHttpStatus(), ex.getTokenErrorResult().getHttpStatus());
+    public ResponseEntity<ApiResponse<BaseErrorCode>> handleTokenException(TokenException ex) {
+        return ApiResponse.onFailure(ex.getTokenErrorResult());
     }
     @ExceptionHandler(UserException.class)
     public ResponseEntity<ApiResponse<BaseErrorCode>> handleUserException(UserException e) {

@@ -12,10 +12,13 @@ import com.example.hearhere.service.SunoAiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -42,15 +45,24 @@ public class AsmrController {
     public ResponseEntity<?> getRandomPrompts() {
         ArrayList<String> randomprompts = (ArrayList<String>) examplePromptRepository.get3RandomPrompts();
         GenerateRandomPromptResponseDto responseDto = new GenerateRandomPromptResponseDto(randomprompts);
-        return (responseDto!=null)?
-                ResponseEntity.status(HttpStatus.OK).body(responseDto):
-                ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("랜덤 프롬프트 생성에 실패했습니다.");
+        if (responseDto!=null) return ResponseEntity.status(HttpStatus.OK).body(responseDto);
+        else {
+            String jsonResponse = "{\"error\": \"Internal server error\", \"message\": \"" + "랜덤 프롬프트 생성에 실패했습니다." + "\"}";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).headers(headers).body(jsonResponse);
+        }
     }
 
     @PostMapping("/asmr/generate")
     public ResponseEntity<?> generateASMR(@RequestBody GenerateAsmrRequestDto dto) throws InterruptedException {
         // 0. 값 검증
-        if (!dto.isValid()) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("잘못된 요청입니다.");
+        if (!dto.isValid()) {
+            String jsonResponse = "{\"error\": \"Bad Request\", \"message\": \"" + "유저 프롬프트가 없거나 isMusicIncluded가 0 또는 1이 아닙니다." + "\"}";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).headers(headers).body(jsonResponse);
+        }
 
         GenerateAsmrResponseDto responseDto = new GenerateAsmrResponseDto();
         // 1. ChatGPT로 프롬프트 작업
@@ -90,7 +102,10 @@ public class AsmrController {
                 }
                 responseDto.setMusicUrl(audioInfo.get(0).get("audio_url").toString());
             } else {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Audio generation failed");
+                String jsonResponse = "{\"error\": \"Intenal server error\", \"message\": \"" + "음악 생성에 실패했습니다." + "\"}";
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).headers(headers).body(jsonResponse);
             }
 
         }
@@ -112,14 +127,23 @@ public class AsmrController {
         String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
         String userId = jwtUtil.getUserIdFromToken(accessToken);
         // 2. DTO 값 검증
-        if (!requestDto.isValid()) return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("잘못된 요청입니다.");
+        if (!requestDto.isValid()) {
+            String jsonResponse = "{\"error\": \"Bad Request\", \"message\": \"" + "URL 형식이 잘못되었거나 볼륨 값이 잘못되었습니다." + "\"}";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).headers(headers).body(jsonResponse);
+        }
         // 3. ASMR 저장
         Asmr created = new Asmr(null, userId, requestDto.getTitle(), requestDto.getMusicUrl(), requestDto.getMusicVolumn(), requestDto.getSoundUrls().toString(), requestDto.getSoundVolumns().toString());
         Asmr saved = asmrRepository.save(created);
         // 4. 값 리턴
-        return (saved!=null)?
-                ResponseEntity.status(HttpStatus.OK).body(new SaveAsmrResponseDto(saved.getAsmrId())):
-                ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("ASMR 저장에 실패했습니다.");
+        if (saved != null) return ResponseEntity.status(HttpStatus.OK).body(new SaveAsmrResponseDto(saved.getAsmrId()));
+        else {
+            String jsonResponse = "{\"error\": \"Internal server error\", \"message\": \"" + "ASMR 저장에 실패했습니다." + "\"}";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).headers(headers).body(jsonResponse);
+        }
     }
 
     @GetMapping("/asmr/my-asmr")
@@ -146,14 +170,18 @@ public class AsmrController {
     }
 
     @GetMapping("/asmr/my-asmr/{asmrId}")
-    public ResponseEntity<?> getMyAsmr(@PathVariable("asmrId") Long asmrId, @RequestHeader("Authorization") String authorizationHeader) {
+    public ResponseEntity<?> getMyAsmr(@PathVariable("asmrId") Long asmrId, @RequestHeader("Authorization") String authorizationHeader)  {
         // 1. 토큰 사용해서 유저 id 찾기
         String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
         String userId = jwtUtil.getUserIdFromToken(accessToken);
         // 2. 유저 id, asmr id 사용해서 엔티티 찾기
         Asmr searched = asmrRepository.findById(asmrId).orElse(null);
-        if (searched==null || !searched.getUserId().toString().equals(userId))
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("잘못된 요청입니다.");
+        if (searched==null || !searched.getUserId().toString().equals(userId)) {
+            String jsonResponse = "{\"error\": \"Bad Request\", \"message\": \"" + "asmrId가 잘못되었습니다." + "\"}";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).headers(headers).body(jsonResponse);
+        }
         // 3. DTO에 넣어서 리턴
         RetrieveAsmrDto response = new RetrieveAsmrDto(
                 searched.getAsmrId(),
