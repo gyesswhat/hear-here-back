@@ -56,6 +56,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        // 토큰 검사를 하지 않을 경로를 설정
+        String path = request.getServletPath();
+
+        return path.equals("/login") ||
+                path.startsWith("/oauth2/authorization") ||
+                path.startsWith("/login/oauth2/code") ||
+                path.equals("/reissue/access-token") ||
+                path.equals("/asmr/randomprompts") ||
+                path.equals("/asmr/generate");
+    }
+
     // TokenException 처리
     private void handleTokenException(HttpServletResponse response, TokenException e) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -64,4 +77,5 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // TokenException 메시지를 사용하여 JSON 응답 반환
         String jsonResponse = "{\"error\": \"Invalid Token\", \"message\": \"" + e.getMessage() + "\"}";
         response.getWriter().write(jsonResponse);    }
+
 }
