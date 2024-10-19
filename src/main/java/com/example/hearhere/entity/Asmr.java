@@ -38,4 +38,7 @@ public class Asmr {
     @Column(name = "sound_volumns")
     private String soundVolumns;
 
+    @Column(name = "sound_positions")
+    private String soundPositions;
+
 }

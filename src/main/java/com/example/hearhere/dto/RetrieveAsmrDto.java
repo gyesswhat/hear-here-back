@@ -18,4 +18,5 @@ public class RetrieveAsmrDto {
     private Integer musicVolumn;
     private ArrayList<String> soundUrls;
     private ArrayList<Integer> soundVolumns;
+    private ArrayList<ArrayList<Integer>> soundPositions;
 }
