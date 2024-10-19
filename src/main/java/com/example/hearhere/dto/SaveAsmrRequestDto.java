@@ -19,10 +19,11 @@ public class SaveAsmrRequestDto {
     private Integer musicVolumn;
     private ArrayList<String> soundUrls;
     private ArrayList<Integer> soundVolumns;
+    private ArrayList<ArrayList<Integer>> soundPositions;
 
     // 입력값 검증 메소드
     public boolean isValid() {
-        return title!=null && isValidMusicUrl() && isValidMusicVolumn() && areValidSoundUrls() && areValidSoundVolumns();
+        return title!=null && isValidMusicUrl() && isValidMusicVolumn() && areValidSoundUrls() && areValidSoundVolumns() && areValidSoundPositions();
     }
 
     // 음악 URL 검증 (유효한 URL인지 확인)
@@ -73,6 +74,27 @@ public class SaveAsmrRequestDto {
                 return false;
             }
         }
+        return true;
+    }
+
+    // 사운드 위치 값 검증
+    private boolean areValidSoundPositions() {
+        if (soundPositions == null || soundPositions.isEmpty()) {
+            return false;
+        }
+
+        for (ArrayList<Integer> positions : soundPositions) {
+            if (positions == null || positions.isEmpty()) {
+                return false;
+            }
+
+            for (Integer time : positions) {
+                if (time == null || time < 0) {
+                    return false;
+                }
+            }
+        }
+
         return true;
     }
 }
