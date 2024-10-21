@@ -199,7 +199,14 @@ public class AsmrController {
     @PatchMapping("/asmr/my-asmr/{asmrId}/update/sound")
     public ResponseEntity<?> updateMyAsmrSound(@PathVariable("asmrId") Long asmrId,
                                                @RequestHeader("Authorization") String authorizationHeader,
-                                               @RequestBody SaveAsmrRequestDto requestDto) {
+                                               @RequestBody UpdateAsmrSoundDto requestDto) {
+        // 0. DTO 값 검증
+        if (!requestDto.isValid()) {
+            String jsonResponse = "{\"error\": \"Bad Request\", \"message\": \"" + "URL 형식이 잘못되었거나 볼륨 값이 잘못되었습니다." + "\"}";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).headers(headers).body(jsonResponse);
+        }
         // 1. 토큰 사용해서 유저 id 찾기
         String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
         String userId = jwtUtil.getUserIdFromToken(accessToken);
