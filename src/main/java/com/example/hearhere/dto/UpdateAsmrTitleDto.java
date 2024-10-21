@@ -10,6 +10,5 @@ import lombok.Setter;
 @Getter
 @Setter
 public class UpdateAsmrTitleDto {
-    private String asmrId;
     private String title;
 }
