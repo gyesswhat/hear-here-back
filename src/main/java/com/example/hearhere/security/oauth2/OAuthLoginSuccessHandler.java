@@ -102,9 +102,9 @@ public class OAuthLoginSuccessHandler extends SimpleUrlAuthenticationSuccessHand
         // 액세스 토큰 발급
         String accessToken = jwtUtil.generateAccessToken(user.getUserId(), ACCESS_TOKEN_EXPIRATION_TIME);
 
-        // 이름, 액세스 토큰, 리프레쉬 토큰을 담아 리다이렉트
+        // 아이디, 이름, 액세스 토큰, 리프레쉬 토큰을 담아 리다이렉트
         String encodedName = URLEncoder.encode(name, "UTF-8"); // 사용자 이름 URL엔코딩
-        String redirectUri = String.format(REDIRECT_URI, encodedName, accessToken, refreshToken);
+        String redirectUri = String.format(REDIRECT_URI, user.getUserId(), encodedName, accessToken, refreshToken);
         getRedirectStrategy().sendRedirect(request, response, redirectUri);
         SecurityContextHolder.getContext().setAuthentication(authentication);
         log.info("SecurityContextHolder 정보: {}", SecurityContextHolder.getContext().getAuthentication());
