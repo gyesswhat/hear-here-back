@@ -2,6 +2,7 @@ package com.example.hearhere.common;
 
 import com.example.hearhere.common.code.BaseCode;
 import com.example.hearhere.common.code.BaseErrorCode;
+import com.example.hearhere.dto.ReasonDto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
@@ -20,8 +21,9 @@ public class ApiResponse<T> {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private final T payload;
     public static <T> ResponseEntity<ApiResponse<T>> onSuccess(BaseCode code, T data) {
-        ApiResponse<T> response = new ApiResponse<>(true, code.getReasonHttpStatus().getCode(), code.getReasonHttpStatus().getMessage(), data);
-        return ResponseEntity.status(code.getReasonHttpStatus().getHttpStatus()).body(response);
+        ReasonDto reason = code.getReasonHttpStatus();
+        ApiResponse<T> response = new ApiResponse<>(true, reason.getCode(), reason.getMessage(), data);
+        return ResponseEntity.status(reason.getHttpStatus()).body(response);
     }
 
     public static <T> ResponseEntity<ApiResponse<T>> onFailure(BaseErrorCode code) {

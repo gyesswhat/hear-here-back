@@ -7,7 +7,6 @@ import com.example.hearhere.security.jwt.TokenErrorResult;
 import com.example.hearhere.security.jwt.TokenException;
 import com.example.hearhere.security.jwt.TokenResponse;
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -26,16 +25,20 @@ public class TokenServiceImpl implements TokenService {
     public TokenResponse reissueAccessToken(String authorizationHeader) {
         String refreshToken = jwtUtil.getTokenFromHeader(authorizationHeader);
         String userId = jwtUtil.getUserIdFromToken(refreshToken);
-        RefreshToken existRefreshToken = refreshTokenRepository.findByUserId(UUID.fromString(userId));
-        String accessToken = null;
 
-        if (!existRefreshToken.getToken().equals(refreshToken) || jwtUtil.isTokenExpired(refreshToken)) {
-            // 리프레쉬 토큰이 다르거나, 만료된 경우
-            throw new TokenException(TokenErrorResult.INVALID_REFRESH_TOKEN); // 401 에러를 던져 재로그인을 요청
-        } else {
-            // 액세스 토큰 재발급
-            accessToken = jwtUtil.generateAccessToken(UUID.fromString(userId), ACCESS_TOKEN_EXPIRATION_TIME);
+        // 1. 리프레시 토큰을 데이터베이스에서 조회하고 존재 여부 확인
+        RefreshToken existRefreshToken = refreshTokenRepository.findByUserId(UUID.fromString(userId));
+        if (existRefreshToken == null) {
+            throw new TokenException(TokenErrorResult.INVALID_REFRESH_TOKEN); // 리프레시 토큰이 없으면 예외 발생
         }
+
+        // 2. 리프레시 토큰이 다르거나 만료된 경우 예외 발생
+        if (!existRefreshToken.getToken().equals(refreshToken) || jwtUtil.isTokenExpired(refreshToken)) {
+            throw new TokenException(TokenErrorResult.INVALID_REFRESH_TOKEN);
+        }
+
+        // 3. 유효한 리프레시 토큰인 경우 액세스 토큰 재발급
+        String accessToken = jwtUtil.generateAccessToken(UUID.fromString(userId), ACCESS_TOKEN_EXPIRATION_TIME);
 
         return TokenResponse.builder()
                 .accessToken(accessToken)
