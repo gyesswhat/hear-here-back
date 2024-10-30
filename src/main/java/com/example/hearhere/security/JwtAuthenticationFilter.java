@@ -4,6 +4,7 @@ import com.example.hearhere.common.ApiResponse;
 import com.example.hearhere.common.status.ErrorStatus;
 import com.example.hearhere.security.jwt.JwtUtil;
 import com.example.hearhere.security.jwt.TokenException;
+import com.example.hearhere.service.TokenBlacklistService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,9 +21,10 @@ import static com.example.hearhere.security.jwt.TokenErrorResult.INVALID_TOKEN;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    private final TokenBlacklistService tokenBlacklistService;
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, TokenBlacklistService tokenBlacklistService) {
         this.jwtUtil = jwtUtil;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     @Override
@@ -37,8 +39,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 throw new TokenException(INVALID_TOKEN);
             }
 
-            // 토큰에서 userId 추출
+
+            // 토큰 추출
             String token = authorizationHeader.substring(7);
+
+            // 블랙리스트 검증
+            if (tokenBlacklistService.isBlacklisted(token)) {
+                throw new TokenException(INVALID_TOKEN);
+            }
+
+            // 토큰에서 유저id 추출
             String userId = jwtUtil.getUserIdFromToken(token);
 
             // userId가 null이 아니고 인증되지 않았다면 인증 처리

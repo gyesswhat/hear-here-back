@@ -3,6 +3,8 @@ package com.example.hearhere.security;
 import com.example.hearhere.security.jwt.JwtUtil;
 import com.example.hearhere.security.oauth2.OAuthLoginFailureHandler;
 import com.example.hearhere.security.oauth2.OAuthLoginSuccessHandler;
+import com.example.hearhere.service.TokenBlacklistService;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,6 +29,7 @@ public class SecurityConfig {
     private final OAuthLoginSuccessHandler oAuthLoginSuccessHandler;
     private final OAuthLoginFailureHandler oAuthLoginFailureHandler;
     private final JwtUtil jwtUtil;
+    private final TokenBlacklistService tokenBlacklistService;
 
     // CORS 설정
     @Bean
@@ -47,15 +50,20 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable()) // CSRF 비활성화
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
                 .authorizeHttpRequests(authorize ->
                         authorize
                                 .requestMatchers("/").permitAll()
                                 .requestMatchers("/login", "/oauth2/authorization/**", "/login/oauth2/code/**", "/reissue/access-token").permitAll() // 로그인 및 OAuth 경로는 모두 허용
+                                .requestMatchers("/logout").permitAll()
                                 .requestMatchers("/asmr/randomprompts").permitAll()
                                 .requestMatchers("/asmr/generate").permitAll()
                                 .anyRequest().authenticated() // 그 외 요청은 인증 필요
                 )
-                .addFilterBefore(new JwtAuthenticationFilter(jwtUtil), UsernamePasswordAuthenticationFilter.class)  // JWT 필터 추가
+                .logout(logout -> logout.disable())
+                .addFilterBefore(new JwtAuthenticationFilter(jwtUtil, tokenBlacklistService), UsernamePasswordAuthenticationFilter.class)  // JWT 필터 추가
                 .oauth2Login(oauth ->
                         oauth
                                 .successHandler(oAuthLoginSuccessHandler) // 로그인 성공 시 핸들러
