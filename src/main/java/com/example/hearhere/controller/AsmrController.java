@@ -1,6 +1,8 @@
 package com.example.hearhere.controller;
 
+import com.example.hearhere.common.ApiResponse;
 import com.example.hearhere.common.parser.ArrayParser;
+import com.example.hearhere.common.status.ErrorStatus;
 import com.example.hearhere.dto.*;
 import com.example.hearhere.entity.Asmr;
 import com.example.hearhere.repository.AsmrRepository;
@@ -9,6 +11,7 @@ import com.example.hearhere.security.jwt.JwtUtil;
 import com.example.hearhere.service.AudioSearchService;
 import com.example.hearhere.service.ChatGptService;
 import com.example.hearhere.service.SunoAiService;
+import com.example.hearhere.service.TokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +21,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +33,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AsmrController {
 
+    @Autowired
+    private TokenService tokenService;
     @Autowired
     private ChatGptService chatGptService;
     @Autowired
@@ -45,32 +52,22 @@ public class AsmrController {
         ArrayList<String> randomprompts = (ArrayList<String>) examplePromptRepository.get3RandomPrompts();
         GenerateRandomPromptResponseDto responseDto = new GenerateRandomPromptResponseDto(randomprompts);
         if (responseDto != null) return ResponseEntity.status(HttpStatus.OK).body(responseDto);
-        else {
-            String jsonResponse = "{\"error\": \"Internal server error\", \"message\": \"" + "랜덤 프롬프트 생성에 실패했습니다." + "\"}";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).headers(headers).body(jsonResponse);
-        }
+        else return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
     }
 
     @PostMapping("/asmr/generate")
     public ResponseEntity<?> generateASMR(@RequestBody GenerateAsmrRequestDto dto) throws InterruptedException {
-        // 0. 값 검증
-        if (!dto.isValid()) {
-            String jsonResponse = "{\"error\": \"Bad Request\", \"message\": \"" + "유저 프롬프트가 없거나 isMusicIncluded가 0 또는 1이 아닙니다." + "\"}";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).headers(headers).body(jsonResponse);
-        }
-
+        // 1. 값 검증
+        if (!dto.isValid()) return ApiResponse.onFailure(ErrorStatus._BAD_REQUEST);
         GenerateAsmrResponseDto responseDto = new GenerateAsmrResponseDto();
-        // 1. ChatGPT로 프롬프트 작업
+
+        // 2. ChatGPT로 프롬프트 작업
         Map<String, Object> finalPrompt = chatGptService.generatePrompt(dto.getUserPrompt());
 
-        // 2. 음악이 있을 경우
+        // 3. 음악이 있을 경우
         if (dto.getIsMusicIncluded().equals("1")) {
 
-            // 3. SUNO AI로 음악 요소 생성
+            // 3-1. SUNO AI로 음악 요소 생성
             List<String> musicPromptList = (List<String>) finalPrompt.get("music");
             String musicPrompt = musicPromptList.stream().collect(Collectors.joining(", "));
             Map<String, Object> payload = Map.of(
@@ -79,7 +76,7 @@ public class AsmrController {
                     "wait_audio", false  // 비동기 모드로 설정
             );
 
-            // 4. SUNO API로 음악 생성 요청 (비동기)
+            // 3-2. SUNO API로 음악 생성 요청 (비동기)
             ResponseEntity<List> generatedResponse = sunoAiService.generateAudioByPrompt(payload);
 
             if (generatedResponse.getBody() != null && !generatedResponse.getBody().isEmpty()) {
@@ -100,57 +97,69 @@ public class AsmrController {
                     }
                 }
                 responseDto.setMusicUrl(audioInfo.get(0).get("audio_url").toString());
-            } else {
-                String jsonResponse = "{\"error\": \"Intenal server error\", \"message\": \"" + "음악 생성에 실패했습니다." + "\"}";
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).headers(headers).body(jsonResponse);
-            }
+            } else return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
 
         }
         // 4. 소리 요소 찾기
         List<String> audioPromptList = (List<String>) finalPrompt.get("audio");
         ArrayList<String> audioUrls = audioSearchService.searchSoundByPrompt(audioPromptList);
-        responseDto.setSoundUrls(audioUrls);
+        ArrayList<String> tempUrls = new ArrayList<>();
+        tempUrls.add("tempUrl");
+        responseDto.setSoundUrls(tempUrls);
 
         // 5. 제목 짓기
         Map<String, Object> generatedTitle = chatGptService.generateTitle(dto.getUserPrompt());
         responseDto.setTitle((String) generatedTitle.get("title"));
 
-        return ResponseEntity.status(HttpStatus.OK).body(responseDto);
+        // 6. 저장
+        LocalDateTime localDateTime = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        Asmr generated = new Asmr(
+                null,
+                null,
+                responseDto.getTitle(),
+                responseDto.getMusicUrl(),
+                null,
+                responseDto.getSoundUrls().toString(),
+                null,
+                null,
+                formatter.format(localDateTime)
+        );
+        Asmr saved = asmrRepository.save(generated);
+        responseDto.setAsmrId(saved.getAsmrId());
+
+        // 7. 리턴
+        if (responseDto.getAsmrId() == null) return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
+        else return ResponseEntity.status(HttpStatus.OK).body(responseDto);
     }
 
-    @PostMapping("/asmr/save")
+    @PatchMapping("/asmr/save")
     public ResponseEntity<?> saveAsmr(@RequestHeader("Authorization") String authorizationHeader,
                                       @RequestBody SaveAsmrRequestDto requestDto) {
-        // 1. 토큰 사용해서 유저 uuid 찾기
-        String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
-        String userId = jwtUtil.getUserIdFromToken(accessToken);
+        // 1. 토큰 사용해서 유저 id 찾기
+        String userId = tokenService.findUserIdByToken(authorizationHeader);
         // 2. DTO 값 검증
-        if (!requestDto.isValid()) {
-            String jsonResponse = "{\"error\": \"Bad Request\", \"message\": \"" + "URL 형식이 잘못되었거나 볼륨 값이 잘못되었습니다." + "\"}";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).headers(headers).body(jsonResponse);
-        }
+        if (!requestDto.isValid()) return ApiResponse.onFailure(ErrorStatus._BAD_REQUEST);
         // 3. ASMR 저장
-        Asmr created = new Asmr(null, userId, requestDto.getTitle(), requestDto.getMusicUrl(), requestDto.getMusicVolumn(), requestDto.getSoundUrls().toString(), requestDto.getSoundVolumns().toString(), requestDto.getSoundPositions().toString());
-        Asmr saved = asmrRepository.save(created);
+        Asmr searched = asmrRepository.findById(requestDto.getAsmrId()).orElse(null);
+        if (searched == null) return ApiResponse.onFailure(ErrorStatus._BAD_REQUEST);
+        searched.setUserId(userId);
+        searched.setTitle(requestDto.getTitle());
+        searched.setMusicUrl(requestDto.getMusicUrl());
+        searched.setMusicVolumn(requestDto.getMusicVolumn());
+        searched.setSoundUrls(requestDto.getSoundUrls().toString());
+        searched.setSoundVolumns(requestDto.getSoundVolumns().toString());
+        searched.setSoundPositions(requestDto.getSoundPositions().toString());
+        Asmr saved = asmrRepository.save(searched);
         // 4. 값 리턴
         if (saved != null) return ResponseEntity.status(HttpStatus.OK).body(new SaveAsmrResponseDto(saved.getAsmrId()));
-        else {
-            String jsonResponse = "{\"error\": \"Internal server error\", \"message\": \"" + "ASMR 저장에 실패했습니다." + "\"}";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).headers(headers).body(jsonResponse);
-        }
+        else return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
     }
 
     @GetMapping("/asmr/my-asmr")
     public ResponseEntity<?> getMyAsmrList(@RequestHeader("Authorization") String authorizationHeader) {
-        // 1. 토큰 사용해서 유저 uuid 찾기
-        String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
-        String userId = jwtUtil.getUserIdFromToken(accessToken);
+        // 1. 토큰 사용해서 유저 id 찾기
+        String userId = tokenService.findUserIdByToken(authorizationHeader);
         // 2. 유저 id 사용해서 ASMR 리스트 찾기
         ArrayList<Asmr> searchedList = asmrRepository.findAllByUserId(userId);
         // 3. DTO에 넣어서 리턴
@@ -173,16 +182,10 @@ public class AsmrController {
     @GetMapping("/asmr/my-asmr/{asmrId}")
     public ResponseEntity<?> getMyAsmr(@PathVariable("asmrId") Long asmrId, @RequestHeader("Authorization") String authorizationHeader) {
         // 1. 토큰 사용해서 유저 id 찾기
-        String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
-        String userId = jwtUtil.getUserIdFromToken(accessToken);
+        String userId = tokenService.findUserIdByToken(authorizationHeader);
         // 2. 유저 id, asmr id 사용해서 엔티티 찾기
         Asmr searched = asmrRepository.findById(asmrId).orElse(null);
-        if (searched == null || !searched.getUserId().toString().equals(userId)) {
-            String jsonResponse = "{\"error\": \"Bad Request\", \"message\": \"" + "asmrId가 잘못되었습니다." + "\"}";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).headers(headers).body(jsonResponse);
-        }
+        if (searched == null || !searched.getUserId().toString().equals(userId)) return ApiResponse.onFailure(ErrorStatus._BAD_REQUEST);
         // 3. DTO에 넣어서 리턴
         RetrieveAsmrDto response = new RetrieveAsmrDto(
                 searched.getAsmrId(),
@@ -201,23 +204,12 @@ public class AsmrController {
                                                @RequestHeader("Authorization") String authorizationHeader,
                                                @RequestBody UpdateAsmrSoundDto requestDto) {
         // 0. DTO 값 검증
-        if (!requestDto.isValid()) {
-            String jsonResponse = "{\"error\": \"Bad Request\", \"message\": \"" + "URL 형식이 잘못되었거나 볼륨 값이 잘못되었습니다." + "\"}";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).headers(headers).body(jsonResponse);
-        }
+        if (!requestDto.isValid()) return ApiResponse.onFailure(ErrorStatus._BAD_REQUEST);
         // 1. 토큰 사용해서 유저 id 찾기
-        String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
-        String userId = jwtUtil.getUserIdFromToken(accessToken);
+        String userId = tokenService.findUserIdByToken(authorizationHeader);
         // 2. 유저 id, asmr id 사용해서 엔티티 찾기
         Asmr searched = asmrRepository.findById(asmrId).orElse(null);
-        if (searched == null || !searched.getUserId().toString().equals(userId)) {
-            String jsonResponse = "{\"error\": \"Bad Request\", \"message\": \"" + "asmrId가 잘못되었습니다." + "\"}";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).headers(headers).body(jsonResponse);
-        }
+        if (searched == null || !searched.getUserId().toString().equals(userId)) return ApiResponse.onFailure(ErrorStatus._BAD_REQUEST);
         // 3. 내용 수정
         searched.setMusicUrl(requestDto.getMusicUrl());
         searched.setMusicVolumn(requestDto.getMusicVolumn());
@@ -226,12 +218,7 @@ public class AsmrController {
         searched.setSoundPositions(requestDto.getSoundPositions().toString());
         Asmr saved = asmrRepository.save(searched);
         // 4. 리턴
-        if (saved == null) {
-            String jsonResponse = "{\"error\": \"Internal Server Error\", \"message\": \"" + "수정에 실패했습니다." + "\"}";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).headers(headers).body(jsonResponse);
-        }
+        if (saved == null) return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
         else return ResponseEntity.status(HttpStatus.OK).build();
     }
 
@@ -240,26 +227,15 @@ public class AsmrController {
                                                @RequestHeader("Authorization") String authorizationHeader,
                                                @RequestBody UpdateAsmrTitleDto updateAsmrTitleDto) {
         // 1. 토큰 사용해서 유저 id 찾기
-        String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
-        String userId = jwtUtil.getUserIdFromToken(accessToken);
+        String userId = tokenService.findUserIdByToken(authorizationHeader);
         // 2. 유저 id, asmr id 사용해서 엔티티 찾기
         Asmr searched = asmrRepository.findById(asmrId).orElse(null);
-        if (searched == null || !searched.getUserId().toString().equals(userId)) {
-            String jsonResponse = "{\"error\": \"Bad Request\", \"message\": \"" + "asmrId가 잘못되었습니다." + "\"}";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).headers(headers).body(jsonResponse);
-        }
+        if (searched == null || !searched.getUserId().toString().equals(userId)) return ApiResponse.onFailure(ErrorStatus._BAD_REQUEST);
         // 3. 수정
         searched.setTitle(updateAsmrTitleDto.getTitle());
         Asmr saved = asmrRepository.save(searched);
         // 4. 리턴
-        if (saved == null) {
-            String jsonResponse = "{\"error\": \"Internal Server Error\", \"message\": \"" + "수정에 실패했습니다." + "\"}";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).headers(headers).body(jsonResponse);
-        }
+        if (saved == null) return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
         else return ResponseEntity.status(HttpStatus.OK).build();
     }
 }

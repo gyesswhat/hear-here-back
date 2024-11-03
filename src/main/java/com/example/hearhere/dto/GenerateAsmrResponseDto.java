@@ -12,6 +12,7 @@ import java.util.ArrayList;
 @Getter
 @Setter
 public class GenerateAsmrResponseDto {
+    private Long asmrId;
     private String title;
     private String musicUrl;
     private ArrayList<String> soundUrls;
