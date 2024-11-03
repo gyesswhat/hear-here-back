@@ -44,4 +44,11 @@ public class TokenServiceImpl implements TokenService {
                 .accessToken(accessToken)
                 .build();
     }
+
+    @Override
+    public String findUserIdByToken(String authorizationHeader) {
+        String accessToken = jwtUtil.getTokenFromHeader(authorizationHeader);
+        String userId = jwtUtil.getUserIdFromToken(accessToken);
+        return userId;
+    }
 }
