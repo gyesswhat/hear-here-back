@@ -63,6 +63,7 @@ public class AsmrController {
 
         // 2. ChatGPT로 프롬프트 작업
         Map<String, Object> finalPrompt = chatGptService.generatePrompt(dto.getUserPrompt());
+        log.info(finalPrompt.toString());
 
         // 3. 음악이 있을 경우
         if (dto.getIsMusicIncluded().equals("1")) {
@@ -101,11 +102,22 @@ public class AsmrController {
 
         }
         // 4. 소리 요소 찾기
-        List<String> audioPromptList = (List<String>) finalPrompt.get("audio");
-        ArrayList<String> audioUrls = audioSearchService.searchSoundByPrompt(audioPromptList);
-        ArrayList<String> tempUrls = new ArrayList<>();
-        tempUrls.add("tempUrl");
-        responseDto.setSoundUrls(tempUrls);
+        Object soundPromptObject = finalPrompt.get("sound");
+
+        if (soundPromptObject instanceof List<?>) {
+            List<?> soundPromptListRaw = (List<?>) soundPromptObject;
+
+            // 각 요소가 Map<String, String> 인지 확인 후 변환
+            List<Map<String, String>> soundPromptList = soundPromptListRaw.stream()
+                    .filter(element -> element instanceof Map)
+                    .map(element -> (Map<String, String>) element)
+                    .collect(Collectors.toList());
+
+            ArrayList<SoundDetailDto> soundDetails = audioSearchService.searchSoundByPrompt(soundPromptList);
+            responseDto.setSoundDetails(soundDetails);
+        } else {
+            return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
+        }
 
         // 5. 제목 짓기
         Map<String, Object> generatedTitle = chatGptService.generateTitle(dto.getUserPrompt());

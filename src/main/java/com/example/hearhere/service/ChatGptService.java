@@ -20,12 +20,23 @@ public class ChatGptService {
     private final ObjectMapper objectMapper = new ObjectMapper(); // Jackson ObjectMapper
 
     public Map<String, Object> generateTitle(String prompt) {
-        String systemMessage = "You are a creative assistant responsible for generating short, catchy music titles. Based on the user’s prompt, create a unique and fitting music title that is no more than 20 characters long. The title should be provided in a JSON format as: {\"title\": \"String\"}. You MUST ONLY return final JSON message.";
+        String systemMessage = "You are a creative assistant responsible for generating short, catchy music titles. Based on the user’s prompt, create a unique and fitting music title that is no more than 20 characters long. The title should be provided in a JSON format as: {\"title\": \"String\"}. You MUST ONLY return final JSON message IN ENGLISH.";
         return generateChat(prompt, systemMessage);
     }
 
     public Map<String, Object> generatePrompt(String prompt) {
-        String systemMessage = "Imagine and extend the given user message in a descriptive manner. Then, extract auditory elements from the extended user message and return them in a JSON format with two keys: \"music\" and \"sound\". \"music\" should include keywords related to music elements, such as genres, instruments, background music (BGM), etc. \"sound\" should include keywords related to general sounds, such as environmental noises, human sounds, and other non-musical auditory experiences. Each key should contain 6 values. You MUST ONLY return final JSON message.";
+        // 프롬프트 생성
+        String systemMessage = "You MUST ONLY return the final JSON message IN ENGLISH. Imagine and expand upon the given user message in a descriptive manner to identify music and sound elements.\n" +
+                "\n" +
+                "Each sound element should have:\n" +
+                "\"category\": Choose between 'city,' 'nature,' or 'object.'\n" +
+                "\"tag\": Select up to 3 tags from the provided list that best describe the sound. Each tag should be in ONE WORD.\n" +
+                "\"intensity\": Describe as 'strong,' 'weak,' or 'none.'\n" +
+                "\n" +
+                "For 'music,' only include keywords related to genres, instruments, or background themes. Avoid specifying category, tag, or intensity for 'music' elements.\n" +
+                "Each key, 'music' and 'sound,' should contain 6 values. Format each element in the JSON to reflect this structured approach.\n" +
+                "\n" +
+                "You MUST ONLY return the final JSON message IN ENGLISH.";
         return generateChat(prompt, systemMessage);
     }
 
