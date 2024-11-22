@@ -33,7 +33,7 @@ public class ChatGptService {
                 "\"tag\": Select up to 3 tags from the provided list that best describe the sound. Each tag should be in ONE WORD.\n" +
                 "\"intensity\": Describe as 'strong,' 'weak,' or 'none.'\n" +
                 "\n" +
-                "For 'music,' only include keywords related to genres, instruments, or background themes. Avoid specifying category, tag, or intensity for 'music' elements.\n" +
+                "For 'music,' only include keywords related to genres, instruments, or background themes. NEVER SPECIFY category, tag, or intensity for 'music' elements. In 'music', YOU SHOULD ONLY CONTAIN PLAIN TEXT\n" +
                 "Each key, 'music' and 'sound,' should contain 6 values. Format each element in the JSON to reflect this structured approach.\n" +
                 "\n" +
                 "You MUST ONLY return the final JSON message IN ENGLISH.";

@@ -25,9 +25,10 @@ public class AudioSearchService {
     public ArrayList<SoundDetailDto> searchSoundByPrompt(List<Map<String, String>> audioPromptList) {
         log.info("audioPromptList\n" + audioPromptList.toString());
 
-        ArrayList<SoundDetailDto> soundDetailList = new ArrayList<>(); // Set을 사용하여 중복 제거
+        ArrayList<SoundDetailDto> soundDetailList = new ArrayList<>();
 
         for (Map<String, String> prompt : audioPromptList) {
+            // 1. 값 가져오기
             String category = prompt.get("category");
             Object tagObject = prompt.get("tag");
             List<String> tags;
@@ -38,20 +39,23 @@ public class AudioSearchService {
                 tags = new ArrayList<>();
             }
             log.info(tags.toString());
-            String intensity = prompt.get("intensity");
 
-            List<Sound> sounds = new ArrayList<>();
+            // 2. 검색을 위해 정리
+            String tag1 = tags.size() > 0 ? tags.get(0) : null;
+            String tag2 = tags.size() > 1 ? tags.get(1) : null;
+            String tag3 = tags.size() > 2 ? tags.get(2) : null;
 
-            for (String tag : tags) {
-                sounds.addAll(soundRepository.findByTag(tag));
-            }
+            // 3. 검색
+            List<Sound> sounds = soundRepository.findByCategoryAndAnyTag(category, tag1, tag2, tag3);
 
+            // 4. DTO로 변환
             for (Sound sound : sounds) {
                 SoundDetailDto soundDetailDto = new SoundDetailDto(
                         sound.getSoundId(),
                         s3Url + sound.getName() + ".wav",
                         sound.getLength()
                 );
+                // 중복 방지
                 boolean exists = soundDetailList.stream()
                         .anyMatch(existingDetail -> existingDetail.getUrl().equals(soundDetailDto.getUrl()));
 
