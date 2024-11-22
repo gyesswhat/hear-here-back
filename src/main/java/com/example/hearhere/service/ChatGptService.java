@@ -36,7 +36,8 @@ public class ChatGptService {
                 "For 'music,' only include keywords related to genres, instruments, or background themes. NEVER SPECIFY category, tag, or intensity for 'music' elements. In 'music', YOU SHOULD ONLY CONTAIN PLAIN TEXT\n" +
                 "Each key, 'music' and 'sound,' should contain 6 values. Format each element in the JSON to reflect this structured approach.\n" +
                 "\n" +
-                "You MUST ONLY return the final JSON message IN ENGLISH.";
+                "You MUST ONLY return the final JSON message IN ENGLISH." +
+                "For example, it should be like this: {music=[Smooth jazz, Guitar, Piano, Light beat, Relaxing Melody, Beach Theme], sound=[{category=nature, tag=[waves, wind, seagulls], intensity=medium}, {category=object, tag=[blanket, laughter, picnic], intensity=weak}, {category=city, tag=[beach, sunset, air], intensity=strong}]}";
         return generateChat(prompt, systemMessage);
     }
 
