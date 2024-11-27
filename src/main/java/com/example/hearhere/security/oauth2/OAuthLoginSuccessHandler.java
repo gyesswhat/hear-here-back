@@ -114,8 +114,8 @@ public class OAuthLoginSuccessHandler extends SimpleUrlAuthenticationSuccessHand
         if (host.contains("localhost")) redirectUri = REDIRECT_URI_LOCAL;
         else redirectUri = REDIRECT_URI_PROD;
 
-        String.format(redirectUri, user.getUserId(), encodedName, accessToken, refreshToken);
-        getRedirectStrategy().sendRedirect(request, response, redirectUri);
+        String formattedRedirectUri = String.format(redirectUri, user.getUserId(), encodedName, accessToken, refreshToken);
+        getRedirectStrategy().sendRedirect(request, response, formattedRedirectUri);
         SecurityContextHolder.getContext().setAuthentication(authentication);
         log.info("SecurityContextHolder 정보: {}", SecurityContextHolder.getContext().getAuthentication());
     }
