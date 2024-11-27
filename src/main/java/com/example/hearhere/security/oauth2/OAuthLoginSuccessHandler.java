@@ -25,8 +25,11 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class OAuthLoginSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
-    @Value("${jwt.redirect}")
-    private String REDIRECT_URI; // 프론트엔드로 Jwt 토큰을 리다이렉트할 URI
+    @Value("${jwt.redirect.local}")
+    private String REDIRECT_URI_LOCAL;
+
+    @Value("${jwt.redirect.prod}")
+    private String REDIRECT_URI_PROD;
 
     @Value("${jwt.access-token.expiration-time}")
     private long ACCESS_TOKEN_EXPIRATION_TIME; // 액세스 토큰 유효기간
@@ -104,7 +107,14 @@ public class OAuthLoginSuccessHandler extends SimpleUrlAuthenticationSuccessHand
 
         // 아이디, 이름, 액세스 토큰, 리프레쉬 토큰을 담아 리다이렉트
         String encodedName = URLEncoder.encode(name, "UTF-8"); // 사용자 이름 URL엔코딩
-        String redirectUri = String.format(REDIRECT_URI, user.getUserId(), encodedName, accessToken, refreshToken);
+
+        String host = request.getHeader("Host");
+        log.info(host);
+        String redirectUri;
+        if (host.contains("localhost")) redirectUri = REDIRECT_URI_LOCAL;
+        else redirectUri = REDIRECT_URI_PROD;
+
+        String.format(redirectUri, user.getUserId(), encodedName, accessToken, refreshToken);
         getRedirectStrategy().sendRedirect(request, response, redirectUri);
         SecurityContextHolder.getContext().setAuthentication(authentication);
         log.info("SecurityContextHolder 정보: {}", SecurityContextHolder.getContext().getAuthentication());
