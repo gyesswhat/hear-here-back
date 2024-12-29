@@ -108,11 +108,16 @@ public class OAuthLoginSuccessHandler extends SimpleUrlAuthenticationSuccessHand
         // 아이디, 이름, 액세스 토큰, 리프레쉬 토큰을 담아 리다이렉트
         String encodedName = URLEncoder.encode(name, "UTF-8"); // 사용자 이름 URL엔코딩
 
+        // Host 헤더 기반으로 리다이렉트 URI 결정
         String host = request.getHeader("Host");
-        log.info(host);
+        log.info("Host: {}", host);
+
         String redirectUri;
-        if (host.contains("localhost")) redirectUri = REDIRECT_URI_LOCAL;
-        else redirectUri = REDIRECT_URI_PROD;
+        if (host != null && (host.contains("localhost") || host.startsWith("127.0.0.1"))) {
+            redirectUri = REDIRECT_URI_LOCAL;
+        } else {
+            redirectUri = REDIRECT_URI_PROD;
+        }
 
         String formattedRedirectUri = String.format(redirectUri, user.getUserId(), encodedName, accessToken, refreshToken);
         getRedirectStrategy().sendRedirect(request, response, formattedRedirectUri);

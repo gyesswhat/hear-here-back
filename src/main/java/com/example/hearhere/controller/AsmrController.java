@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -71,54 +72,72 @@ public class AsmrController {
             // 3-1. SUNO AI로 음악 요소 생성
             List<String> musicPromptList = (List<String>) finalPrompt.get("music");
             String musicPrompt = musicPromptList.stream().collect(Collectors.joining(", "));
-            Map<String, Object> payload = Map.of(
-                    "prompt", "Create a music piece with the following instruments and styles: " + musicPrompt,
-                    "make_instrumental", true,
-                    "wait_audio", false  // 비동기 모드로 설정
-            );
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("prompt", "Create a music piece with the following instruments and styles. Music should be less than 1 minute 30 seconds: " + musicPrompt);
+            payload.put("make_instrumental", true);
+            payload.put("wait_audio", false);  // 비동기 모드로 설정
+
 
             // 3-2. SUNO API로 음악 생성 요청 (비동기)
+
             ResponseEntity<List> generatedResponse = sunoAiService.generateAudioByPrompt(payload);
 
-            if (generatedResponse.getBody() != null && !generatedResponse.getBody().isEmpty()) {
-                Map<String, Object> generated = (Map<String, Object>) generatedResponse.getBody().get(1);
-                String audioId = (String) generated.get("id");
+            if (generatedResponse != null && generatedResponse.getBody() != null && !generatedResponse.getBody().isEmpty()) {
+                try {
+                    Map<String, Object> generated = (Map<String, Object>) generatedResponse.getBody().get(1); // 확인
+                    String audioId = (String) generated.get("id");
 
-                // 5. 오디오 생성 상태 주기적으로 확인 (폴링 방식)
-                boolean isGenerated = false;
-                List<Map<String, Object>> audioInfo = null;
-
-                while (!isGenerated) {
-                    // 5초 대기 후 다시 확인
-                    Thread.sleep(5000);
-                    audioInfo = sunoAiService.getAudioInfo(audioId);
-                    // 오디오 URL이 비어 있지 않으면 생성 완료
-                    if (audioInfo != null && audioInfo.get(0).get("status").toString().equals("complete")) {
-                        isGenerated = true;
+                    if (audioId == null || audioId.isEmpty()) {
+                        log.info("Invalid audio ID received from Suno API");
+                        return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
                     }
+
+                    // 5. 오디오 생성 상태 주기적으로 확인 (폴링 방식)
+                    boolean isGenerated = false;
+                    List<Map<String, Object>> audioInfo = null;
+
+                    while (!isGenerated) {
+                        try {
+                            // 5초 대기 후 다시 확인
+                            Thread.sleep(5000);
+                            audioInfo = sunoAiService.getAudioInfo(audioId);
+
+                            if (audioInfo != null && !audioInfo.isEmpty()) {
+                                Map<String, Object> audioDetails = audioInfo.get(0);
+                                String status = (String) audioDetails.get("status");
+
+                                if ("complete".equalsIgnoreCase(status)) {
+                                    isGenerated = true;
+                                    responseDto.setMusicUrl((String) audioDetails.get("audio_url"));
+                                } else if ("failed".equalsIgnoreCase(status)) {
+                                    log.info("Audio generation failed at Suno API");
+                                    return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
+                                }
+                            }
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            log.info("Thread was interrupted during polling");
+                            return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
+                        } catch (Exception e) {
+                            log.info("Error during audio info polling: " + e.getMessage());
+                            return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
+                        }
+                    }
+
+                    if (!isGenerated) {
+                        log.info("Audio generation did not complete successfully");
+                        return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
+                    }
+
+                } catch (ClassCastException | IndexOutOfBoundsException e) {
+                    log.info("Unexpected response format from Suno API: " + e.getMessage());
+                    return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
                 }
-                responseDto.setMusicUrl(audioInfo.get(0).get("audio_url").toString());
-            } else return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
-
+            } else {
+                log.info("Empty or null response from Suno API");
+                return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
+            }
         }
-        // 4. 소리 요소 찾기
-        Object soundPromptObject = finalPrompt.get("sound");
-
-        if (soundPromptObject instanceof List<?>) {
-            List<?> soundPromptListRaw = (List<?>) soundPromptObject;
-
-            // 각 요소가 Map<String, String> 인지 확인 후 변환
-            List<Map<String, String>> soundPromptList = soundPromptListRaw.stream()
-                    .filter(element -> element instanceof Map)
-                    .map(element -> (Map<String, String>) element)
-                    .collect(Collectors.toList());
-
-            ArrayList<SoundDetailDto> soundDetails = audioSearchService.searchSoundByPrompt(soundPromptList);
-            responseDto.setSoundDetails(soundDetails);
-        } else {
-            return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
-        }
-
         // 5. 제목 짓기
         Map<String, Object> generatedTitle = chatGptService.generateTitle(dto.getUserPrompt());
         responseDto.setTitle((String) generatedTitle.get("title"));
