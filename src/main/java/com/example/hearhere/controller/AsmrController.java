@@ -138,6 +138,25 @@ public class AsmrController {
                 return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
             }
         }
+
+        // 4. 소리 요소 찾기
+        Object soundPromptObject = finalPrompt.get("sound");
+
+        if (soundPromptObject instanceof List<?>) {
+            List<?> soundPromptListRaw = (List<?>) soundPromptObject;
+
+            // 각 요소가 Map<String, String> 인지 확인 후 변환
+            List<Map<String, String>> soundPromptList = soundPromptListRaw.stream()
+                    .filter(element -> element instanceof Map)
+                    .map(element -> (Map<String, String>) element)
+                    .collect(Collectors.toList());
+
+            ArrayList<SoundDetailDto> soundDetails = audioSearchService.searchSoundByPrompt(soundPromptList);
+            responseDto.setSoundDetails(soundDetails);
+        } else {
+            return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
+        }
+
         // 5. 제목 짓기
         Map<String, Object> generatedTitle = chatGptService.generateTitle(dto.getUserPrompt());
         responseDto.setTitle((String) generatedTitle.get("title"));
