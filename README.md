@@ -1,5 +1,7 @@
 # 생성형 AI 활용 ASMR 서비스 Hear Here 백엔드 레포지토리
 
+<a href="https://github.com/aoqlsdl/hearhere-front">프론트엔드 레포지토리</a>
+
 ## 🎧 Stacks
 
 ### Language & Framework
