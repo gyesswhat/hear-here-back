@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,11 +26,17 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class OAuthLoginSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
-    @Value("${jwt.redirect.local}")
-    private String REDIRECT_URI_LOCAL;
+    @Value("${jwt.redirect.basic.local}")
+    private String REDIRECT_URI_BASIC_LOCAL;
 
-    @Value("${jwt.redirect.prod}")
-    private String REDIRECT_URI_PROD;
+    @Value("${jwt.redirect.basic.prod}")
+    private String REDIRECT_URI_BASIC_PROD;
+
+    @Value("${jwt.redirect.save.local}")
+    private String REDIRECT_URI_SAVE_LOCAL;
+
+    @Value("${jwt.redirect.save.prod}")
+    private String REDIRECT_URI_SAVE_PROD;
 
     @Value("${jwt.access-token.expiration-time}")
     private long ACCESS_TOKEN_EXPIRATION_TIME; // 액세스 토큰 유효기간
@@ -48,7 +55,10 @@ public class OAuthLoginSuccessHandler extends SimpleUrlAuthenticationSuccessHand
         OAuth2AuthenticationToken token = (OAuth2AuthenticationToken) authentication; // 토큰
         final String provider = token.getAuthorizedClientRegistrationId(); // provider 추출
 
-        // 구글 || 카카오 || 네이버 로그인 요청
+
+        // 테스트용
+        // Localhost:8080/oauth2/authorization/google?env=0&action=basic
+        // 0. 구글 | 카카오 | 네이버 로그인 요청 구분
         switch (provider) {
             case "google" -> {
                 log.info("구글 로그인 요청");
@@ -64,7 +74,7 @@ public class OAuthLoginSuccessHandler extends SimpleUrlAuthenticationSuccessHand
             }
         }
 
-        // 정보 추출
+        // 1. 정보 추출
         String providerId = oAuth2UserInfo.getProviderId();
         String name = oAuth2UserInfo.getName();
 
@@ -93,7 +103,7 @@ public class OAuthLoginSuccessHandler extends SimpleUrlAuthenticationSuccessHand
         log.info("PROVIDER : {}", provider);
         log.info("PROVIDER_ID : {}", providerId);
 
-        // 리프레쉬 토큰 새로 발급 후 저장
+        // 2. 리프레쉬 토큰 발급
         String refreshToken = jwtUtil.generateRefreshToken(user.getUserId(), REFRESH_TOKEN_EXPIRATION_TIME);
 
         RefreshToken newRefreshToken = RefreshToken.builder()
@@ -102,26 +112,41 @@ public class OAuthLoginSuccessHandler extends SimpleUrlAuthenticationSuccessHand
                 .build();
         refreshTokenRepository.save(newRefreshToken);
 
-        // 액세스 토큰 발급
+        // 3. 액세스 토큰 발급
         String accessToken = jwtUtil.generateAccessToken(user.getUserId(), ACCESS_TOKEN_EXPIRATION_TIME);
 
-        // 아이디, 이름, 액세스 토큰, 리프레쉬 토큰을 담아 리다이렉트
+        // 4. 아이디, 이름, 액세스 토큰, 리프레쉬 토큰을 담아 리다이렉트
         String encodedName = URLEncoder.encode(name, "UTF-8"); // 사용자 이름 URL엔코딩
-
-        // Host 헤더 기반으로 리다이렉트 URI 결정
-        String host = request.getHeader("Host");
-        log.info("Host: {}", host);
-
-        String redirectUri;
-        if (host != null && (host.contains("localhost") || host.startsWith("127.0.0.1"))) {
-            redirectUri = REDIRECT_URI_LOCAL;
-        } else {
-            redirectUri = REDIRECT_URI_PROD;
-        }
+        String redirectUri = determineRedirectURI(request); // 리다이렉트 URI 호출
 
         String formattedRedirectUri = String.format(redirectUri, user.getUserId(), encodedName, accessToken, refreshToken);
         getRedirectStrategy().sendRedirect(request, response, formattedRedirectUri);
         SecurityContextHolder.getContext().setAuthentication(authentication);
         log.info("SecurityContextHolder 정보: {}", SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    // 리다이렉트 URI env, action에 따라 결정
+    private String determineRedirectURI(HttpServletRequest request) {
+        HashMap<String, String> redirectURIMap = new HashMap<>();
+        redirectURIMap.put("0_basic", REDIRECT_URI_BASIC_LOCAL);
+        redirectURIMap.put("0_save", REDIRECT_URI_SAVE_LOCAL);
+        redirectURIMap.put("1_basic", REDIRECT_URI_BASIC_PROD);
+        redirectURIMap.put("1_save", REDIRECT_URI_SAVE_PROD);
+
+        // 1. 세션에서 env 값 가져오기
+        String env = (String) request.getSession().getAttribute("env");
+        log.info("세션에서 불러온 env 값: {}", env);
+        env = (env == null) ? "1" : env;
+
+        // 2. 세션에서 action 값 가져오기
+        String action = (String) request.getSession().getAttribute("action");
+        log.info("세션에서 불러온 action 값: {}", action);
+        action = (action == null) ? "basic" : action;
+
+        // 3. 리다이렉트 URI 결정
+        String key = env + "_" + action;
+        String redirectURI = redirectURIMap.get(key);
+
+        return redirectURI;
     }
 }

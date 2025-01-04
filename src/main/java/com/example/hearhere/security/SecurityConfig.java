@@ -1,20 +1,19 @@
 package com.example.hearhere.security;
 
 import com.example.hearhere.security.jwt.JwtUtil;
+import com.example.hearhere.security.oauth2.OAuth2EnvActionFilter;
 import com.example.hearhere.security.oauth2.OAuthLoginFailureHandler;
 import com.example.hearhere.security.oauth2.OAuthLoginSuccessHandler;
 import com.example.hearhere.service.TokenBlacklistService;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -64,6 +63,7 @@ public class SecurityConfig {
                 )
                 .logout(logout -> logout.disable())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtUtil, tokenBlacklistService), UsernamePasswordAuthenticationFilter.class)  // JWT 필터 추가
+                .addFilterBefore(new OAuth2EnvActionFilter(), OAuth2AuthorizationRequestRedirectFilter.class)
                 .oauth2Login(oauth ->
                         oauth
                                 .successHandler(oAuthLoginSuccessHandler) // 로그인 성공 시 핸들러
