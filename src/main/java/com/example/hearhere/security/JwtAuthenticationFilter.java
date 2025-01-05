@@ -77,7 +77,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 path.equals("/reissue/access-token") ||
                 path.equals("/asmr/randomprompts") ||
                 path.equals("/asmr/generate") ||
-                path.equals("/");
+                path.equals("/") ||
+                path.equals("/callback/suno");
     }
 
     // TokenException 처리

@@ -12,6 +12,7 @@ import com.example.hearhere.service.AudioSearchService;
 import com.example.hearhere.service.ChatGptService;
 import com.example.hearhere.service.SunoAiService;
 import com.example.hearhere.service.TokenService;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -57,7 +59,7 @@ public class AsmrController {
     }
 
     @PostMapping("/asmr/generate")
-    public ResponseEntity<?> generateASMR(@RequestBody GenerateAsmrRequestDto dto) throws InterruptedException {
+    public ResponseEntity<?> generateASMR(HttpSession session, @RequestBody GenerateAsmrRequestDto dto) throws Exception {
         // 1. 값 검증
         if (!dto.isValid()) return ApiResponse.onFailure(ErrorStatus._BAD_REQUEST);
         GenerateAsmrResponseDto responseDto = new GenerateAsmrResponseDto();
@@ -68,73 +70,31 @@ public class AsmrController {
 
         // 3. 음악이 있을 경우
         if (dto.getIsMusicIncluded().equals("1")) {
-
-            // 3-1. SUNO AI로 음악 요소 생성
+            // 3-1. 프롬프트 찾기
             List<String> musicPromptList = (List<String>) finalPrompt.get("music");
             String musicPrompt = musicPromptList.stream().collect(Collectors.joining(", "));
+
+            // 3-2. payload 만들기
             Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("prompt", "Create a music piece with the following instruments and styles. Music should be less than 1 minute 30 seconds: " + musicPrompt);
-            payload.put("make_instrumental", true);
-            payload.put("wait_audio", false);  // 비동기 모드로 설정
+            payload.put("customMode", true);
+            payload.put("instrumental", true);
+            payload.put("prompt", musicPrompt);
+            payload.put("callBackUrl", "https://hearhere-back.site/callback/suno");
 
+            // 3-3. 음악 생성
+            try {
+                // 3-3-1. Suno API를 호출하여 Task ID 생성
+                String taskId = sunoAiService.generateTaskId(payload);
+                log.info("Task ID generated: {}", taskId);
 
-            // 3-2. SUNO API로 음악 생성 요청 (비동기)
+                // 3-3-2. Task ID를 기반으로 완료된 데이터를 대기 및 반환
+                Map<String, Object> result = sunoAiService.getResultByTaskId(taskId);
+                log.info("Received complete result for Task ID {}: {}", taskId, result);
 
-            ResponseEntity<List> generatedResponse = sunoAiService.generateAudioByPrompt(payload);
-
-            if (generatedResponse != null && generatedResponse.getBody() != null && !generatedResponse.getBody().isEmpty()) {
-                try {
-                    Map<String, Object> generated = (Map<String, Object>) generatedResponse.getBody().get(1); // 확인
-                    String audioId = (String) generated.get("id");
-
-                    if (audioId == null || audioId.isEmpty()) {
-                        log.info("Invalid audio ID received from Suno API");
-                        return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
-                    }
-
-                    // 5. 오디오 생성 상태 주기적으로 확인 (폴링 방식)
-                    boolean isGenerated = false;
-                    List<Map<String, Object>> audioInfo = null;
-
-                    while (!isGenerated) {
-                        try {
-                            // 5초 대기 후 다시 확인
-                            Thread.sleep(5000);
-                            audioInfo = sunoAiService.getAudioInfo(audioId);
-
-                            if (audioInfo != null && !audioInfo.isEmpty()) {
-                                Map<String, Object> audioDetails = audioInfo.get(0);
-                                String status = (String) audioDetails.get("status");
-
-                                if ("complete".equalsIgnoreCase(status)) {
-                                    isGenerated = true;
-                                    responseDto.setMusicUrl((String) audioDetails.get("audio_url"));
-                                } else if ("failed".equalsIgnoreCase(status)) {
-                                    log.info("Audio generation failed at Suno API");
-                                    return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
-                                }
-                            }
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            log.info("Thread was interrupted during polling");
-                            return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
-                        } catch (Exception e) {
-                            log.info("Error during audio info polling: " + e.getMessage());
-                            return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
-                        }
-                    }
-
-                    if (!isGenerated) {
-                        log.info("Audio generation did not complete successfully");
-                        return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
-                    }
-
-                } catch (ClassCastException | IndexOutOfBoundsException e) {
-                    log.info("Unexpected response format from Suno API: " + e.getMessage());
-                    return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
-                }
-            } else {
-                log.info("Empty or null response from Suno API");
+                String musicUrl = sunoAiService.getMusicUrlFromResult(result);
+                responseDto.setMusicUrl(musicUrl);
+            } catch (Exception e) {
+                log.error("Error generating ASMR: {}", e.getMessage(), e);
                 return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
             }
         }
@@ -142,6 +102,7 @@ public class AsmrController {
         // 4. 소리 요소 찾기
         Object soundPromptObject = finalPrompt.get("sound");
 
+        // 4-1. 값 검증
         if (soundPromptObject instanceof List<?>) {
             List<?> soundPromptListRaw = (List<?>) soundPromptObject;
 

@@ -36,7 +36,10 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedHeaders(Collections.singletonList("*"));
         config.setAllowedMethods(Collections.singletonList("*"));
-        config.setAllowedOriginPatterns(Arrays.asList("https://hearhere-front.vercel.app/", "http://localhost:5173")); // 허용할 origin
+        config.setAllowedOriginPatterns(Arrays.asList(
+                "https://hearhere-front.vercel.app/",
+                "http://localhost:5173",
+                "https://hearhere-back.site")); // 허용할 origin
         config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -59,6 +62,7 @@ public class SecurityConfig {
                                 .requestMatchers("/logout").permitAll()
                                 .requestMatchers("/asmr/randomprompts").permitAll()
                                 .requestMatchers("/asmr/generate").permitAll()
+                                .requestMatchers("/callback/suno").permitAll()
                                 .anyRequest().authenticated() // 그 외 요청은 인증 필요
                 )
                 .logout(logout -> logout.disable())
@@ -70,6 +74,7 @@ public class SecurityConfig {
                                 .failureHandler(oAuthLoginFailureHandler) // 로그인 실패 시 핸들러
                 )
         ;
+
         return http.build();
     }
 }
