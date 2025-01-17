@@ -5,8 +5,10 @@ import com.example.hearhere.common.parser.ArrayParser;
 import com.example.hearhere.common.status.ErrorStatus;
 import com.example.hearhere.dto.*;
 import com.example.hearhere.entity.Asmr;
+import com.example.hearhere.entity.Sound;
 import com.example.hearhere.repository.AsmrRepository;
 import com.example.hearhere.repository.ExamplePromptRepository;
+import com.example.hearhere.repository.SoundRepository;
 import com.example.hearhere.security.jwt.JwtUtil;
 import com.example.hearhere.service.AudioSearchService;
 import com.example.hearhere.service.ChatGptService;
@@ -16,6 +18,7 @@ import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -48,7 +51,11 @@ public class AsmrController {
     private ExamplePromptRepository examplePromptRepository;
     @Autowired
     private AsmrRepository asmrRepository;
-    private final JwtUtil jwtUtil;
+    @Autowired
+    private SoundRepository soundRepository;
+
+    @Value("${s3.basic.url}")
+    private String s3Url;
 
     @GetMapping("/asmr/randomprompts")
     public ResponseEntity<?> getRandomPrompts() {
@@ -169,15 +176,17 @@ public class AsmrController {
 
     @GetMapping("/asmr/my-asmr")
     public ResponseEntity<?> getMyAsmrList(@RequestHeader("Authorization") String authorizationHeader) {
-        // 1. 토큰 사용해서 유저 id 찾기
+        // 1. 토큰 사용해서 유저 ID 찾기
         String userId = tokenService.findUserIdByToken(authorizationHeader);
-        // 2. 유저 id 사용해서 ASMR 리스트 찾기
-        ArrayList<Asmr> searchedList = asmrRepository.findAllByUserId(userId);
+
+        // 2. 유저 ID 사용해서 ASMR 리스트 찾기
+        List<Asmr> searchedList = asmrRepository.findAllByUserId(userId);
+
         // 3. DTO에 넣어서 리턴
-        ArrayList<RetrieveAsmrDto> responses = new ArrayList<>();
-        for (int i = 0; i < searchedList.size(); i++) {
-            Asmr searched = searchedList.get(i);
-            responses.add(new RetrieveAsmrDto(
+        List<RetrieveAsmrListDto> responses = new ArrayList<>();
+        for (Asmr searched : searchedList) {
+            // RetrieveAsmrDto 생성
+            responses.add(new RetrieveAsmrListDto(
                     searched.getAsmrId(),
                     searched.getTitle(),
                     searched.getMusicUrl(),
@@ -187,17 +196,43 @@ public class AsmrController {
                     ArrayParser.parseStringToNestedIntegerArrayList(searched.getSoundPositions())
             ));
         }
+
         return ResponseEntity.status(HttpStatus.OK).body(responses);
     }
 
     @GetMapping("/asmr/my-asmr/{asmrId}")
-    public ResponseEntity<?> getMyAsmr(@PathVariable("asmrId") Long asmrId, @RequestHeader("Authorization") String authorizationHeader) {
-        // 1. 토큰 사용해서 유저 id 찾기
+    public ResponseEntity<?> getMyAsmr(
+            @PathVariable("asmrId") Long asmrId,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        // 1. 토큰 사용해서 유저 ID 찾기
         String userId = tokenService.findUserIdByToken(authorizationHeader);
-        // 2. 유저 id, asmr id 사용해서 엔티티 찾기
+
+        // 2. 유저 ID와 asmrId 사용해서 ASMR 엔티티 찾기
         Asmr searched = asmrRepository.findById(asmrId).orElse(null);
-        if (searched == null || !searched.getUserId().toString().equals(userId)) return ApiResponse.onFailure(ErrorStatus._BAD_REQUEST);
-        // 3. DTO에 넣어서 리턴
+        if (searched == null || !searched.getUserId().toString().equals(userId)) {
+            return ApiResponse.onFailure(ErrorStatus._BAD_REQUEST);
+        }
+
+        // 3. soundUrls를 이용해 soundDetails 생성
+        List<String> soundUrls = ArrayParser.parseStringToArrayList(searched.getSoundUrls());
+        ArrayList<SoundDetailDto> soundDetails = new ArrayList<>();
+        for (String url : soundUrls) {
+            // URL에서 name 추출
+            String name = extractNameFromUrl(url);
+
+            // name으로 Sound 엔티티 조회
+            Sound sound = soundRepository.findByName(name);
+            log.info("sound:" + sound);
+            if (sound != null) {
+                soundDetails.add(new SoundDetailDto(
+                        sound.getSoundId(),
+                        s3Url + sound.getName() + ".wav", // URL을 name + ".wav" 형식으로 생성
+                        sound.getLength()
+                ));
+            }
+        }
+
+        // 4. RetrieveAsmrDto 생성
         RetrieveAsmrDto response = new RetrieveAsmrDto(
                 searched.getAsmrId(),
                 searched.getTitle(),
@@ -205,8 +240,11 @@ public class AsmrController {
                 searched.getMusicVolumn(),
                 ArrayParser.parseStringToArrayList(searched.getSoundUrls()),
                 ArrayParser.parseStringToIntegerArrayList(searched.getSoundVolumns()),
-                ArrayParser.parseStringToNestedIntegerArrayList(searched.getSoundPositions())
+                ArrayParser.parseStringToNestedIntegerArrayList(searched.getSoundPositions()),
+                soundDetails // soundDetails 추가
         );
+
+        // 5. 응답 반환
         return ResponseEntity.status(HttpStatus.OK).body(response);
     }
 
@@ -248,5 +286,17 @@ public class AsmrController {
         // 4. 리턴
         if (saved == null) return ApiResponse.onFailure(ErrorStatus._INTERNAL_SERVER_ERROR);
         else return ResponseEntity.status(HttpStatus.OK).build();
+    }
+
+    private String extractNameFromUrl(String url) {
+        log.info(url);
+        if (url == null || !url.contains("/")) {
+            return null; // URL이 비정상적일 경우 처리
+        }
+        // URL에서 마지막 "/" 뒤의 파일 이름만 추출
+        String[] parts = url.split("/");
+        String filename = parts[parts.length - 1]; // 마지막 부분이 파일 이름
+        // 확장자(.wav) 제거 후 파일 이름 반환
+        return filename.replace(".wav", "");
     }
 }

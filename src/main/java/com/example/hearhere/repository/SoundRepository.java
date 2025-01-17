@@ -23,4 +23,7 @@ public interface SoundRepository extends JpaRepository<Sound, Long> {
             @Param("tag2") String tag2,
             @Param("tag3") String tag3
     );
+
+    @Query("SELECT s FROM Sound s WHERE s.name = :name")
+    Sound findByName(@Param("name") String name);
 }

@@ -11,7 +11,7 @@ import java.util.ArrayList;
 @AllArgsConstructor
 @Getter
 @Setter
-public class RetrieveAsmrDto {
+public class RetrieveAsmrListDto {
     private Long asmrId;
     private String title;
     private String musicUrl;
@@ -19,5 +19,4 @@ public class RetrieveAsmrDto {
     private ArrayList<String> soundUrls;
     private ArrayList<Integer> soundVolumns;
     private ArrayList<ArrayList<Integer>> soundPositions;
-    private ArrayList<SoundDetailDto> soundDetails;
 }
