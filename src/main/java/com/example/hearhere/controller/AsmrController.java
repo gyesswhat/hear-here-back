@@ -3,35 +3,30 @@ package com.example.hearhere.controller;
 import com.example.hearhere.common.ApiResponse;
 import com.example.hearhere.common.parser.ArrayParser;
 import com.example.hearhere.common.status.ErrorStatus;
+import com.example.hearhere.common.util.FileUtil;
 import com.example.hearhere.dto.*;
 import com.example.hearhere.entity.Asmr;
 import com.example.hearhere.entity.Sound;
 import com.example.hearhere.repository.AsmrRepository;
 import com.example.hearhere.repository.ExamplePromptRepository;
 import com.example.hearhere.repository.SoundRepository;
-import com.example.hearhere.security.jwt.JwtUtil;
-import com.example.hearhere.service.AudioSearchService;
-import com.example.hearhere.service.ChatGptService;
-import com.example.hearhere.service.SunoAiService;
-import com.example.hearhere.service.TokenService;
+import com.example.hearhere.service.*;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.File;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -48,11 +43,17 @@ public class AsmrController {
     @Autowired
     private AudioSearchService audioSearchService;
     @Autowired
+    private MusicDurationService musicDurationService;
+
+    @Autowired
     private ExamplePromptRepository examplePromptRepository;
     @Autowired
     private AsmrRepository asmrRepository;
     @Autowired
     private SoundRepository soundRepository;
+
+    @Autowired
+    private FileUtil fileUtil;
 
     @Value("${s3.basic.url}")
     private String s3Url;
@@ -232,12 +233,36 @@ public class AsmrController {
             }
         }
 
+        String duration = null;
+        File tempFile = null;
+        if (searched.getMusicUrl() != null) {
+            try {
+                tempFile = fileUtil.downloadFile(searched.getMusicUrl());
+                log.info("Temp file path: " + tempFile.getAbsolutePath());
+
+                if (!fileUtil.isWavFile(tempFile)) {
+                    duration = musicDurationService.getMp3Duration(tempFile.getAbsolutePath());
+                }
+                else {
+                    duration = musicDurationService.getWavDuration(tempFile.getAbsolutePath());
+                }
+                log.info("Duration: " + duration);
+            } catch (UnsupportedOperationException e) {
+                log.error("Unsupported file format: ", e);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: Unsupported file format.");
+            } catch (Exception e) {
+                log.error("Error occurred: ", e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
+            }
+        }
+
         // 4. RetrieveAsmrDto 생성
         RetrieveAsmrDto response = new RetrieveAsmrDto(
                 searched.getAsmrId(),
                 searched.getTitle(),
                 searched.getMusicUrl(),
                 searched.getMusicVolumn(),
+                duration,
                 ArrayParser.parseStringToArrayList(searched.getSoundUrls()),
                 ArrayParser.parseStringToIntegerArrayList(searched.getSoundVolumns()),
                 ArrayParser.parseStringToNestedIntegerArrayList(searched.getSoundPositions()),

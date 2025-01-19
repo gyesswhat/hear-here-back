@@ -39,6 +39,8 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	implementation 'commons-io:commons-io:2.11.0'
+	implementation 'com.googlecode.soundlibs:mp3spi:1.9.5-1'
 }
 
 tasks.named('test') {
